@@ -1,4 +1,4 @@
-local MP = minetest.get_modpath("kitpvp")
+local MP = minetest.get_modpath("kitpvp_new")
 
 dofile(MP.."/kitpvp.lua")
 

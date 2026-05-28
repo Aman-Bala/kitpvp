@@ -1,27 +1,15 @@
--- KitPvP with 6 random TP points
-local tp_points = {
-	{x = 1000, y = 100, z = 1000},
-	{x = 2000, y = 100, z = 2000},
-	{x = 3000, y = 100, z = 3000},
-	{x = 4000, y = 100, z = 4000},
-	{x = 5000, y = 100, z = 5000},
-	{x = 6000, y = 100, z = 6000},
-}
-
-
-local function random_tp()
-	math.randomseed(os.time() + (minetest.get_us_time and minetest.get_us_time() or 0))
-	local idx = math.random(1, #tp_points)
-	return tp_points[idx]
-end
-
+-- ==========================================
+-- 1. CHAT COMMAND TO OPEN KIT SELECTION
+-- ==========================================
 minetest.register_chatcommand("kitpvp", {
+	params = "",
+	description = "Open the Kit Selection menu and clear your inventory.",
 	func = function(name, param)
-		-- clear inventory before showing formspec
 		local player = minetest.get_player_by_name(name)
 		if player then
 			local inv = player:get_inventory()
 			if inv then
+				-- Safely empty all inventory and armor lists
 				local function clear_inventory(inv)
 					if not inv then return end
 					local function fill_empty(listname, size)
@@ -41,6 +29,7 @@ minetest.register_chatcommand("kitpvp", {
 			end
 		end
 
+		-- Display selection formspec UI
 		minetest.show_formspec(name, "kitpvp:form",
 			"size[8,9]" ..
 			"label[0,0;Kit Selection]" ..
@@ -56,7 +45,11 @@ minetest.register_chatcommand("kitpvp", {
 	end
 })
 
--- safe_enchant
+-- ==========================================
+-- 2. HELPER FUNCTIONS (ENCHANTING & INVENTORY)
+-- ==========================================
+
+-- Safely applies enchants using Mineclonia's API layers
 local function safe_enchant(stack, enchant_name, level)
 	if not stack or stack:is_empty() then return stack end
 
@@ -83,90 +76,59 @@ local function safe_enchant(stack, enchant_name, level)
 	return stack
 end
 
-local function add_if_valid(inv, listname, item)
-	if not item then return end
-	local stack = nil
-	if type(item) == "string" then
-		if item == "" then return end
-		stack = ItemStack(item)
-	elseif type(item) == "table" and item.name then
-		stack = ItemStack(item.name .. (item.count and (" "..item.count) or ""))
-	else
-		return
-	end
-	if not stack or stack:is_empty() then return end
-	inv:add_item(listname, stack)
-end
-
-local function give_armor(inv, armor_items, protection_level, curse_level)
+-- Modified to accept direct items as separate parameters to completely eliminate indexing/bracket bugs
+local function give_armor(inv, helmet_name, chest_name, leggings_name, boots_name, protection_level, curse_level)
 	local curse = "curse_of_vanishing"
 	local prot = "protection"
-	-- ensure armor list exists and has 4 slots
+	
 	if inv:get_list("armor") == nil then
 		inv:set_list("armor", { ItemStack(""), ItemStack(""), ItemStack(""), ItemStack("") })
 	end
 
-	-- chest -> armor slot 2
-	local chest_name = armor_items[2]
+	-- 1. HELMET -> Slot 1 (Top Left)
+	if helmet_name and helmet_name ~= "" then
+		local helmet_stack = ItemStack(helmet_name)
+		if helmet_stack and not helmet_stack:is_empty() then
+			if protection_level and protection_level > 0 then helmet_stack = safe_enchant(helmet_stack, prot, protection_level) end
+			helmet_stack = safe_enchant(helmet_stack, curse, curse_level)
+			inv:set_stack("armor", 1, helmet_stack)
+		end
+	end
+
+	-- 2. CHESTPLATE -> Slot 2 (Bottom Left)
 	if chest_name and chest_name ~= "" then
 		local chest_stack = ItemStack(chest_name)
-		if not chest_stack or chest_stack:is_empty() then
-			minetest.log("warning", "give_armor: invalid chest item '" .. tostring(chest_name) .. "'")
-		else
-			if protection_level and protection_level > 0 then
-				chest_stack = safe_enchant(chest_stack, prot, protection_level)
-			end
+		if chest_stack and not chest_stack:is_empty() then
+			if protection_level and protection_level > 0 then chest_stack = safe_enchant(chest_stack, prot, protection_level) end
 			chest_stack = safe_enchant(chest_stack, curse, curse_level)
 			inv:set_stack("armor", 2, chest_stack)
 		end
 	end
 
-	-- leggings -> armor slot 3
-	local legs_name = armor_items[3]
-	if legs_name and legs_name ~= "" then
-		local legs_stack = ItemStack(legs_name)
-		if not legs_stack or legs_stack:is_empty() then
-			minetest.log("warning", "give_armor: invalid leggings item '" .. tostring(legs_name) .. "'")
-		else
-			if protection_level and protection_level > 0 then
-				legs_stack = safe_enchant(legs_stack, prot, protection_level)
-			end
-			legs_stack = safe_enchant(legs_stack, curse, curse_level)
-			inv:set_stack("armor", 3, legs_stack)
+	-- 3. LEGGINGS -> Slot 3 (Top Right)
+	if leggings_name and leggings_name ~= "" then
+		local leggings_stack = ItemStack(leggings_name)
+		if leggings_stack and not leggings_stack:is_empty() then
+			if protection_level and protection_level > 0 then leggings_stack = safe_enchant(leggings_stack, prot, protection_level) end
+			leggings_stack = safe_enchant(leggings_stack, curse, curse_level)
+			inv:set_stack("armor", 3, leggings_stack)
 		end
 	end
 
-	-- boots -> main inventory
-	local boots_name = armor_items[4]
+	-- 4. BOOTS -> Slot 4 (Bottom Right)
 	if boots_name and boots_name ~= "" then
 		local boots_stack = ItemStack(boots_name)
-		if not boots_stack or boots_stack:is_empty() then
-			minetest.log("warning", "give_armor: invalid boots item '" .. tostring(boots_name) .. "'")
-		else
-			if protection_level and protection_level > 0 then
-				boots_stack = safe_enchant(boots_stack, prot, protection_level)
-			end
+		if boots_stack and not boots_stack:is_empty() then
+			if protection_level and protection_level > 0 then boots_stack = safe_enchant(boots_stack, prot, protection_level) end
 			boots_stack = safe_enchant(boots_stack, curse, curse_level)
-			inv:add_item("main", boots_stack)
-		end
-	end
-
-	-- helmet -> armor slot 4 (last armor slot)
-	local helmet_name = armor_items[1]
-	if helmet_name and helmet_name ~= "" then
-		local helmet_stack = ItemStack(helmet_name)
-		if not helmet_stack or helmet_stack:is_empty() then
-			minetest.log("warning", "give_armor: invalid helmet item '" .. tostring(helmet_name) .. "'")
-		else
-			if protection_level and protection_level > 0 then
-				helmet_stack = safe_enchant(helmet_stack, prot, protection_level)
-			end
-			helmet_stack = safe_enchant(helmet_stack, curse, curse_level)
-			inv:set_stack("armor", 4, helmet_stack)
+			inv:set_stack("armor", 4, boots_stack)
 		end
 	end
 end
 
+-- ==========================================
+-- 3. FORMSPEC SELECTION & TELEPORT PROCESSING
+-- ==========================================
 minetest.register_on_player_receive_fields(function(player, formname, fields)
 	if formname ~= "kitpvp:form" then return end
 	local player_name = player:get_player_name()
@@ -176,31 +138,42 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
 	-- close the formspec immediately
 	minetest.close_formspec(player_name, "kitpvp:form")
 
-	local tp = random_tp()
+	-- Cascade safety fallbacks down to engine config if spawn module fails
+	local tp = nil
+	if mcl_spawn and mcl_spawn.get_player_spawn_pos then
+		tp = mcl_spawn.get_player_spawn_pos(player)
+	end
+	if not tp then
+		tp = minetest.setting_get_pos("static_spawnpoint") or {x = 0, y = 20, z = 0}
+	end
 
+	-- Kit 1: Pawn Kit
 	if fields.kit1 then
-		give_armor(inv, {
-			"mcl_armor:helmet_diamond",
-			"mcl_armor:chestplate_diamond",
-			"mcl_armor:leggings_diamond",
-			"mcl_armor:boots_diamond"
-		}, 0, 1)
+		give_armor(inv, 
+			"mcl_armor:helmet_diamond", 
+			"mcl_armor:chestplate_diamond", 
+			"mcl_armor:leggings_diamond", 
+			"mcl_armor:boots_diamond", 
+			0, 1
+		)
 
 		local sword = ItemStack("mcl_tools:sword_diamond")
-		sword = safe_enchant(sword, "sharpness", 4) -- Sharpness IV
+		sword = safe_enchant(sword, "sharpness", 4)
 		sword = safe_enchant(sword, "curse_of_vanishing", 1)
 		inv:add_item("main", sword)
 
 		player:set_pos(tp)
 		minetest.chat_send_player(player_name, "You have selected the Pawn Kit!")
 
+	-- Kit 2: Crusher Kit
 	elseif fields.kit2 then
-		give_armor(inv, {
-			"mcl_armor:helmet_netherite",
-			"mcl_armor:chestplate_netherite",
-			"mcl_armor:leggings_iron",
-			"mcl_armor:boots_netherite"
-		}, 0, 1)
+		give_armor(inv, 
+			"mcl_armor:helmet_netherite", 
+			"mcl_armor:chestplate_netherite", 
+			"mcl_armor:leggings_iron", 
+			"mcl_armor:boots_netherite", 
+			0, 1
+		)
 
 		local sword = ItemStack("mcl_tools:sword_iron")
 		local mace = ItemStack("mcl_tools:mace")
@@ -213,34 +186,15 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
 		player:set_pos(tp)
 		minetest.chat_send_player(player_name, "You have selected the Crusher Kit!")
 
+	-- Kit 3: Spearman Kit
 	elseif fields.kit3 then
-		local armor_names = {
-			"mcl_armor:helmet_iron",
-			"mcl_armor:chestplate_iron",
-			"mcl_armor:leggings_diamond",
-			"mcl_armor:boots_diamond"
-		}
-		if inv:get_list("armor") == nil then
-			inv:set_list("armor", { ItemStack(""), ItemStack(""), ItemStack(""), ItemStack("") })
-		end
-		for _, aname in ipairs(armor_names) do
-			local stack = ItemStack(aname)
-			if stack and not stack:is_empty() then
-				stack = safe_enchant(stack, "protection", 2) -- Protection II
-				stack = safe_enchant(stack, "curse_of_vanishing", 1) -- Curse I
-				if aname:find("helmet") then
-					inv:set_stack("armor", 4, stack)
-				elseif aname:find("chestplate") then
-					inv:set_stack("armor", 2, stack)
-				elseif aname:find("leggings") then
-					inv:set_stack("armor", 3, stack)
-				elseif aname:find("boots") then
-					inv:add_item("main", stack)
-				end
-			else
-				minetest.log("warning", "kit3: invalid armor item '" .. tostring(aname) .. "'")
-			end
-		end
+		give_armor(inv, 
+			"mcl_armor:helmet_iron", 
+			"mcl_armor:chestplate_iron", 
+			"mcl_armor:leggings_diamond", 
+			"mcl_armor:boots_diamond", 
+			2, 1
+		)
 
 		local sword = ItemStack("mcl_tools:sword_diamond")
 		local trident = ItemStack("mcl_tridents:trident")
@@ -248,146 +202,92 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
 			sword = safe_enchant(sword, "curse_of_vanishing", 1)
 			sword = safe_enchant(sword, "sharpness", 1)
 			inv:add_item("main", sword)
-		else
-			minetest.log("warning", "kit3: invalid sword item")
 		end
 		if trident and not trident:is_empty() then
 			trident = safe_enchant(trident, "curse_of_vanishing", 1)
 			trident = safe_enchant(trident, "loyalty", 3)
 			trident = safe_enchant(trident, "impaling", 2)
 			inv:add_item("main", trident)
-		else
-			minetest.log("warning", "kit3: invalid trident item")
 		end
 
 		player:set_pos(tp)
 		minetest.chat_send_player(player_name, "You have selected the Spearman Kit!")
 
+	-- Kit 4: Archer Kit
 	elseif fields.kit4 then
-		give_armor(inv, {
-			"mcl_armor:helmet_iron",
-			"mcl_armor:chestplate_diamond",
-			"mcl_armor:leggings_diamond",
-			"mcl_armor:boots_diamond"
-		}, 1, 1)
-
-		local sword = ItemStack("mcl_tools:sword_iron")
-		if sword and not sword:is_empty() then
-			sword = safe_enchant(sword, "sharpness", 2) -- Sharpness II
-			sword = safe_enchant(sword, "curse_of_vanishing", 1)
-			inv:add_item("main", sword)
-		else
-			minetest.log("warning", "kit4: invalid sword item")
-		end
+		give_armor(inv, 
+			"mcl_armor:helmet_chainmail", 
+			"mcl_armor:chestplate_chainmail", 
+			"mcl_armor:leggings_chainmail", 
+			"mcl_armor:boots_chainmail", 
+			1, 1
+		)
 
 		local bow = ItemStack("mcl_bows:bow")
-		if bow and not bow:is_empty() then
-			bow = safe_enchant(bow, "curse_of_vanishing", 1)
-			bow = safe_enchant(bow, "power", 2)
-			inv:add_item("main", bow)
-		else
-			minetest.log("warning", "kit4: invalid bow item")
-		end
-
-		inv:add_item("main", ItemStack("mcl_bows:arrow 20"))
+		bow = safe_enchant(bow, "power", 3)
+		bow = safe_enchant(bow, "infinity", 1)
+		bow = safe_enchant(bow, "curse_of_vanishing", 1)
+		inv:add_item("main", bow)
+		inv:add_item("main", ItemStack("mcl_bows:arrow 1"))
 
 		player:set_pos(tp)
 		minetest.chat_send_player(player_name, "You have selected the Archer Kit!")
 
+	-- Kit 5: Heavy Kit
 	elseif fields.kit_warrior then
-		local armor_names = {
-			"mcl_armor:helmet_diamond",
-			"mcl_armor:chestplate_diamond",
-			"mcl_armor:leggings_diamond",
-			"mcl_armor:boots_diamond"
-		}
-		if inv:get_list("armor") == nil then
-			inv:set_list("armor", { ItemStack(""), ItemStack(""), ItemStack(""), ItemStack("") })
-		end
-		for _, aname in ipairs(armor_names) do
-			local stack = ItemStack(aname)
-			if stack and not stack:is_empty() then
-				stack = safe_enchant(stack, "protection", 2) -- Protection II
-				stack = safe_enchant(stack, "curse_of_vanishing", 1) -- Curse of Vanishing I
-				if aname:find("helmet") then
-					inv:set_stack("armor", 4, stack)
-				elseif aname:find("chestplate") then
-					inv:set_stack("armor", 2, stack)
-				elseif aname:find("leggings") then
-					inv:set_stack("armor", 3, stack)
-				elseif aname:find("boots") then
-					inv:add_item("main", stack)
-				end
-			else
-				minetest.log("warning", "kit_warrior: invalid armor item '" .. tostring(aname) .. "'")
-			end
-		end
+		give_armor(inv, 
+			"mcl_armor:helmet_netherite", 
+			"mcl_armor:chestplate_netherite", 
+			"mcl_armor:leggings_netherite", 
+			"mcl_armor:boots_netherite", 
+			2, 1
+		)
 
-		local sword = ItemStack("mcl_tools:sword_diamond")
-		if sword and not sword:is_empty() then
-			sword = safe_enchant(sword, "sharpness", 2) -- Sharpness II
-			sword = safe_enchant(sword, "curse_of_vanishing", 1) -- Curse of Vanishing I
-			inv:add_item("main", sword)
-		else
-			minetest.log("warning", "kit_warrior: invalid sword item")
-		end
+		local axe = ItemStack("mcl_tools:axe_diamond")
+		axe = safe_enchant(axe, "sharpness", 2)
+		axe = safe_enchant(axe, "curse_of_vanishing", 1)
+		inv:add_item("main", axe)
 
 		player:set_pos(tp)
 		minetest.chat_send_player(player_name, "You have selected the Heavy Kit!")
 
+	-- Kit 6: Barbarian Kit
 	elseif fields.kit6 then
-		if inv:get_list("armor") == nil then
-			inv:set_list("armor", { ItemStack(""), ItemStack(""), ItemStack(""), ItemStack("") })
-		end
+		give_armor(inv, 
+			"", 
+			"mcl_armor:chestplate_iron", 
+			"mcl_armor:leggings_leather", 
+			"", 
+			0, 1
+		)
 
-		give_armor(inv, {
-			"mcl_armor:helmet_diamond",
-			"mcl_armor:chestplate_iron",
-			"mcl_armor:leggings_diamond",
-			"mcl_armor:boots_diamond"
-		}, 1, 1)
-
-		local axe = ItemStack("mcl_tools:axe_diamond")
-		if axe and not axe:is_empty() then
-			axe = safe_enchant(axe, "sharpness", 2)
-			axe = safe_enchant(axe, "curse_of_vanishing", 1)
-			inv:add_item("main", axe)
-		else
-			minetest.log("warning", "kit6: invalid axe item")
-		end
+		local sword = ItemStack("mcl_tools:sword_stone")
+		sword = safe_enchant(sword, "sharpness", 5)
+		sword = safe_enchant(sword, "knockback", 2)
+		sword = safe_enchant(sword, "curse_of_vanishing", 1)
+		inv:add_item("main", sword)
 
 		player:set_pos(tp)
 		minetest.chat_send_player(player_name, "You have selected the Barbarian Kit!")
-	
-	
+
+	-- Kit 7: Crossbow Man Kit
 	elseif fields.kit_crossbow_man then
-	give_armor(inv, {
-		"mcl_armor:helmet_diamond",
-		"mcl_armor:chestplate_diamond",
-		"mcl_armor:leggings_iron",
-		"mcl_armor:boots_iron"
-	}, 2, 1) -- Protection II for diamond, Protection I for iron
+		give_armor(inv, 
+			"mcl_armor:helmet_iron", 
+			"mcl_armor:chestplate_iron", 
+			"mcl_armor:leggings_chainmail", 
+			"mcl_armor:boots_iron", 
+			0, 1
+		)
 
-	-- Add a diamond sword
-	local sword = ItemStack("mcl_tools:sword_diamond")
-	sword = safe_enchant(sword, "sharpness", 2) -- Sharpness II
-	sword = safe_enchant(sword, "curse_of_vanishing", 1)
-	inv:add_item("main", sword)
+		local xbow = ItemStack("mcl_crossbows:crossbow")
+		xbow = safe_enchant(xbow, "quick_charge", 2)
+		xbow = safe_enchant(xbow, "multishot", 1)
+		xbow = safe_enchant(xbow, "curse_of_vanishing", 1)
+		inv:add_item("main", xbow)
+		inv:add_item("main", ItemStack("mcl_bows:arrow 64"))
 
-	-- Add a crossbow with Piercing II and Quick Charge I
-	local crossbow = ItemStack("mcl_bows:crossbow")
-	crossbow = safe_enchant(crossbow, "piercing", 2)
-	crossbow = safe_enchant(crossbow, "quick_charge", 1)
-	inv:add_item("main", crossbow)
-
-	player:set_pos(tp)
-	minetest.chat_send_player(player_name, "You have selected the Crossbow Man Kit!")
-	inv:add_item("main", ItemStack("mcl_bows:arrow 20"))
-	
-	end
-
-
-	if fields.exit then
-		minetest.chat_send_player(player_name, "Exiting kit selection.")
+		player:set_pos(tp)
+		minetest.chat_send_player(player_name, "You have selected the Crossbow Man Kit!")
 	end
 end)
